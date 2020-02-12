@@ -19,6 +19,8 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     require(matrixStats)
     require(tools)
     # These R function scripts need to be in the same directory as this main script.
+    source(file.path(func_dir, "openPlotDevice.R"), local=TRUE)
+    source(file.path(func_dir, "closePlotDevice.R"), local=TRUE)
     source(file.path(func_dir, "initializeParameters.R"), local=TRUE)
     source(file.path(func_dir, "replaceIllegalChars.R"), local=TRUE)
     source(file.path(func_dir, "readReadCountsDatasets.R"), local=TRUE)
@@ -74,6 +76,13 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     # Sample --> Well
     name_map <- c(Subject="Cell", Culture="Experiment", Replicate="Dish", Measure="Plate", Sample="Well")
     exprt_design_merged <- adaptReadCountsDatasets(exprt_design=exprt_design_merged, name_map=name_map)
+    # Match specified subset category name to existing field name of experiment design table.
+    if(!is.null(subset_field_name))
+    {
+        subset_field_name_allowed <- names(name_map)
+        if(!all(subset_field_name %in% subset_field_name_allowed)) stop(paste("subset_field_name must be one of: ", paste0(subset_field_name_allowed,collapse=", "), "!", sep=""))
+        subset_field_name <- name_map[subset_field_name]
+    }
     # Adjust the order to experiment design fields.
     exprt_design_merged <- exprt_design_merged[,c("Time", "Species", "Cell", "State", "Experiment", "Dish", "Plate", "Well", "ID")]
     # Save modified experiment design table.
@@ -93,9 +102,9 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     # Set plate number to 0 for merging sample replicates across different plates.
     if(merge_plates)
     {
-        exprt_design_merged$Plate.Orig <- exprt_design_merged$Plate
+        exprt_design_merged[[merged_plate_field_name]] <- exprt_design_merged$Plate
         exprt_design_merged$Plate <- merged_plate_number
-        exprt_design_merged <- exprt_design_merged[,c("Time", "Species", "Cell", "State", "Experiment", "Dish", "Plate", "Plate.Orig", "Well", "ID")]
+        exprt_design_merged <- exprt_design_merged[,c("Time", "Species", "Cell", "State", "Experiment", "Dish", "Plate", merged_plate_field_name, "Well", "ID")]
     }
 
     # Set the name of cell species and time points.
@@ -106,9 +115,9 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     stopifnot(length(bio_spec)==1)
     time_point <- unique(exprt_design_merged$Time)
     stopifnot(length(time_point)==1)
-    time_length <- paste("Hour", time_point, sep=".")
+    time_length <- paste("Hour", time_point, sep="-")
 
-    # Save the filtered targets and read counts.
+    # Save the filtered exprt design table and read counts.
     exprt_design_merged_file <- file.path(results_dir, "Experiment-Design-Merged.tsv")
     write.table(exprt_design_merged, file=exprt_design_merged_file, quote=FALSE, sep="\t", row.names=FALSE)
     # Write the read counts to a data file.
@@ -139,12 +148,14 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     if(!is.null(legal_chars) && is.character(legal_chars) && nchar(legal_chars)>0) drug_groups_table$Drug <- replaceIllegalChars(string=drug_groups_table$Drug, legal_chars=legal_chars, repl_chars=repl_chars, compress_space=compress_space)
     # Assert no duplicated drug names in drug_groups.
     stopifnot(all(!duplicated(drug_groups_table$Drug)))
-    for(drug_group in drug_groups_table$Group) drug_groups[[drug_group]] <- drug_groups_table[drug_groups_table$Group==drug_group,]$Drug
+    # A drug group contains multiple drugs belonging to this group and the group
+    # name is retrieved from drug group table.
+    for(drug_group in drug_groups_table$Group) drug_groups[[drug_group]] <- drug_groups_table[drug_groups_table$Group==drug_group,"Drug"]
 
-    # Compare the pre-defined drug groups with available treatment conditions
-    # in targets (experiment design) to detech if there are any mismatches. And
-    # it's possible that not all pre-defined drug names of each drug group can be
-    # matched with available drug-treated conditions in each cell line.
+    # Compare the pre-defined drug groups with available treatment conditions in
+    # exprt design table (experiment design) to detech if there are any mismatches.
+    # And it's possible that not all pre-defined drug names of each drug group can
+    # be matched with available drug-treated conditions in each cell line.
     drug_names <- unique(unlist(drug_groups, use.names=FALSE))
     state_names <- unique(exprt_design_merged$State)
     if(verbose1) print(paste("Pre-defined drug groups and available experiment conditions are", (if(setequal(drug_names, state_names)) "the same" else "different")))
@@ -176,37 +187,57 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     # Prepare PDF file for plotting.
     if(plot_clust)
     {
+        clust_image_plot_flow_by_row <- TRUE
+        if(!is.null(clust_image_plot_flow))
+        {
+            clust_image_plot_flow <- tolower(clust_image_plot_flow)
+            if(clust_image_plot_flow=="row" || clust_image_plot_flow=="column")
+            {
+                if(clust_image_plot_flow == "row") clust_image_plot_flow_by_row <- TRUE
+                else clust_image_plot_flow_by_row <- FALSE
+            }
+            else stop("clust_image_plot_flow must be either row or column!")
+        }
+        else stop("clust_image_plot_flow cannot be NULL!")
         clust_main_title <- paste(bio_spec, time_length, sep="-")
-        clust_plot_file <- file.path(results_dir, paste(paste(clust_main_title, "Cluster-Plots", sep="-"), "pdf", sep="."))
-        pdf(file=clust_plot_file, width=8.5, height=11, onefile=TRUE)
+        clust_plot_file_name <- paste(clust_main_title, "Cluster-Plots", sep="-")
+        dev_info <- openPlotDevice(dev_type=clust_image_type, file_name=clust_plot_file_name, dir_name=results_dir, width=clust_image_width, height=clust_image_height, single_file=single_clust_image_file)
         orig_par <- par(no.readonly = TRUE)
-        # Plot layout: 3 rows and 2 columns.
-        par(mfrow=c(3,2))
+        layout(matrix(c(1:(clust_image_rows*clust_image_columns)),nrow=clust_image_rows,ncol=clust_image_columns,byrow=clust_image_plot_flow_by_row), respect=clust_image_keep_aspect_ratio)
+        par(mar=c(bottom=6, left=5.5, top=5.5, right=2) + 0.1)
     }
+
+    # Determine color_field_pos according to color_field_name.
+    sample_id_fields <- read_counts_datasets_merged$sample_id_fields
+    sample_id_field_names <- names(sample_id_fields)
+    if(!(color_field_name %in% sample_id_field_names)) stop(paste0("color_field_name must be one of ", paste0(sample_id_field_names,collapse=", "), "!"))
+    color_field_pos <- sample_id_fields[color_field_name]
+    if(!(color_field_type=="character" || color_field_type=="numeric")) stop("color_field_type must be either character or numeric!")
+
+    # Set drug names.
+    drug_names <- unique(unlist(drug_groups, use.names=FALSE))
 
     # Sort and filter sample replicates in each drug-treated condition for
     # all drug groups and cell lines.
-    drug_names <- unique(unlist(drug_groups, use.names=FALSE))
-    exprt_design_merged <- filterGeneExpSamples(exprt_design_merged=exprt_design_merged, read_counts_merged=read_counts_merged, drug_names=drug_names, dist_cutoffs=outlier_cutoffs, dist_cutoff_outlier=dist_cutoff_outlier, dist_cutoff_group=dist_cutoff_group, min_samples=min_samples, filter_outlier=filter_outlier, plot_clust=plot_clust, verbose=(if(verbose1) verbose2 else verbose1), func_dir=func_dir)
+    exprt_design_merged <- filterGeneExpSamples(exprt_design_merged=exprt_design_merged, read_counts_merged=read_counts_merged, drug_names=drug_names, dist_cutoffs=outlier_cutoffs, subset_field_name=subset_field_name, dist_cutoff_outlier=dist_cutoff_outlier, dist_cutoff_group=dist_cutoff_group, min_samples=min_samples, filter_outlier=filter_outlier, plot_orig_clust=plot_clust, plot_filter_clust=plot_clust, plot_pass_clust=plot_clust, plot_empty_clust=(plot_clust&&plot_empty_clust), color_sample_groups=color_sample_groups, color_field_pos=color_field_pos, color_field_type=color_field_type, clust_title_elems_names=clust_title_elems_names, clust_title_elems_flags=clust_title_elems_flags, clust_title_elems_keys=clust_title_elems_keys, leg_title=color_text_name, verbose=(if(verbose1) verbose2 else verbose1), func_dir=func_dir)
     read_counts_merged <- read_counts_merged[,exprt_design_merged$ID]
     # Remove the rows containing all zero read counts due to the removal of outlier samples.
     read_counts_merged <- read_counts_merged[rowSums(read_counts_merged)>0,]
     # Save filtered experiment design and read counts datasets.
     read_counts_datasets_filtered <- list(exprt_design=exprt_design_merged, read_counts=read_counts_merged)
 
-    # Save the filtered targets and read counts.
-    targets_filtered_file <- file.path(results_dir, "Experiment-Design-Filtered.tsv")
-    write.table(exprt_design_merged, file=targets_filtered_file, quote=FALSE, sep="\t", row.names=FALSE)
+    # Save the filtered exprt design table and read counts.
+    exprt_design_filtered_file <- file.path(results_dir, "Experiment-Design-Filtered.tsv")
+    write.table(exprt_design_merged, file=exprt_design_filtered_file, quote=FALSE, sep="\t", row.names=FALSE)
     # Write the read counts to a data file.
     read_counts_filtered_file <- file.path(results_dir, "Read-Counts-Filtered.tsv")
     write.table(read_counts_merged, file=read_counts_filtered_file, quote=FALSE, sep="\t")
 
-    # Restore orginal graphics settings.
+    # Restore orginal graphics settings and close the plot.
     if(plot_clust)
     {
         par(orig_par)
-        # Close the PDF plot.
-        dev.off()
+        closePlotDevice(dev_info)
     }
 
     #################### Summarize filtered experiment design ####################
@@ -230,9 +261,10 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     if(plot_heatmap)
     {
         # Prepare PDF file for plotting.
-        dist_main_title <- paste(bio_spec, time_length, sep="-")
-        dist_plot_file <- file.path(results_dir, paste(paste(dist_main_title, "Distance-Plots", sep="-"), "pdf", sep="."))
-        pdf(file=dist_plot_file, width=8.5, height=8.5, onefile=TRUE)
+        heatmap_main_title <- paste(bio_spec, time_length, sep="-")
+        heatmap_plot_file_name <- paste(heatmap_main_title, "Distance-Plots", sep="-")
+        dev_info <- openPlotDevice(dev_type=heatmap_image_type, file_name=heatmap_plot_file_name, dir_name=results_dir, width=heatmap_image_width, height=heatmap_image_height, single_file=single_heatmap_image_file)
+        orig_par <- par(no.readonly = TRUE)
 
         # Plot the drugs of each groups across all cell lines.
         for(drug_group_name in names(drug_groups))
@@ -254,12 +286,13 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
                 # Plot heat map of distance matrix.
                 cell_names_str <- paste0(unique(cell_names_state),collapse="/")
                 title_text <- paste(ncol(read_counts_state), state_name, "Samples of", drug_group_name, "Group in Cell", cell_names_str)
-                plotHeatMapOfGeneExpCorDist(gene_exp=read_counts_state, group_names=state_names_state, use_group_names=FALSE, title_text=title_text, margin_bottom=8, dist_method="correlation", norm_factors=FALSE, lower_limit=lower_limit, upper_limit=upper_limit, func_dir=func_dir)
+                plotHeatMapOfGeneExpCorDist(gene_exp=read_counts_state, group_names=state_names_state, use_group_names=FALSE, title_text=title_text, dist_method="correlation", norm_factors=FALSE, lower_limit=lower_limit, upper_limit=upper_limit, margin_bottom=11.5, margin_right=11.5, func_dir=func_dir)
             }
         }
 
         # Close the PDF plot.
-        dev.off()
+        par(orig_par)
+        closePlotDevice(dev_info)
     }
 
     ####### Compare read counts data and obtain differentially expressed molecules ##########
@@ -274,7 +307,7 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
 
     # Compare the difference of molecular expression levels for genes and proteins, and
     # return both raw read counts and differential comparison statistics of all molecules.
-    deg_read_counts <- calcExpressionDifference(read_counts=read_counts_merged, exprt_design=exprt_design_merged, drug_groups=drug_groups, bio_spec=bio_spec, time_length=time_length, results_dir=results_dir, fdrs=fdrs, state_name_ctrl=state_name_ctrl, min_samples=min_samples, rep_req=rep_req, dispersion=dispersion, n_top=n_top, deg_only=deg_only, norm_base=norm_base, remove_small=remove_small, plot_bcv=plot_bcv, plot_smear=plot_smear, pt_chars=pt_chars, read_counts_title=read_counts_title, deg_title=deg_title, top_title=top_title, exp_configs_title=exp_configs_title, calc_title=calc_title, plot_title=plot_title, verbose1=verbose1, verbose2=verbose2, func_dir=func_dir)
+    deg_counts_stats <- calcExpressionDifference(read_counts=read_counts_merged, exprt_design=exprt_design_merged, drug_groups=drug_groups, subset_field_name=subset_field_name, bio_spec=bio_spec, time_length=time_length, results_dir=results_dir, fdrs=fdrs, ctrl_state_name=state_name_ctrl, min_samples=min_samples, min_samples_req=min_samples_req, dispersion=dispersion, n_top=n_top, deg_only=deg_only, norm_base=norm_base, remove_small=remove_small, read_counts_title=read_counts_title, deg_title=deg_title, top_title=top_title, exp_configs_title=exp_configs_title, calc_title=calc_title, plot_title=plot_title, deg_image_type=deg_image_type, deg_image_width=deg_image_width, deg_image_height=deg_image_height, single_deg_image_file=single_deg_image_file, plot_bcv=plot_bcv, plot_smear=plot_smear, pt_chars=pt_chars, verbose1=verbose1, verbose2=verbose2, func_dir=func_dir)
 
     ################################## Clean up ##################################
 
@@ -285,7 +318,7 @@ compareMoleculeExpression <- function(func_dir, repo_dir, config_file, read_coun
     # Original: multiple original molecular read counts
     # Merged: the merged molecular read counts from multiple original read counts.
     # Filtered: the filtered molecular read counts after the removal of outlier samples and all-zero read counts.
-    read_counts_datasets <- list(original=read_counts_datasets_original, merged=read_counts_datasets_merged, filtered=read_counts_datasets_filtered, degstats=deg_read_counts)
+    read_counts_datasets <- list(original=read_counts_datasets_original, merged=read_counts_datasets_merged, filtered=read_counts_datasets_filtered, degstats=deg_counts_stats)
     # Save the dataset object to a RData file.
     if(!is.null(read_counts_datasets_rdata_file))
     {

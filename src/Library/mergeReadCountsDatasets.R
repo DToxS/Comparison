@@ -78,6 +78,6 @@ mergeReadCountsDatasets <- function(read_counts_datasets, merge_method="intersec
     read_counts_merged <- read_counts_merged[order(rownames(read_counts_merged)),]
 
     # Return merged read counts matrix and experiment design table.
-    read_counts_datasets_merged <- list(read_counts=read_counts_merged, exprt_design=exprt_design_merged)
+    read_counts_datasets_merged <- list(read_counts=read_counts_merged, exprt_design=exprt_design_merged, sample_id_fields=read_counts_datasets$sample_id_fields)
     return(read_counts_datasets_merged)
 }

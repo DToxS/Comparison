@@ -75,12 +75,14 @@ initializeParameters <- function(config_file, counts_dir, params_dir, scripts_di
 
     # Flag of outlier filtering
     filter_outlier <- TRUE
-    # Minimum number of sample replicates for filtering outlier and
-    # comparing groups.
+    # The minimum number of sample replicates in each sample group needed
+    # for outlier removal and DEG comparison.
     min_samples <- 3
-    # "all": all groups must have at least min_samples replicates.
-    # "any": any one of the groups must have at least min_samples replicates.
-    rep_req <- "all"
+    # all: the number of sample replicates in each sample group must be
+    #      min_samples at least for DEG comparison.
+    # any: at least one of sample groups must have min_samples sample
+    #      replicates for DEG comparison.
+    min_samples_req <- "all"
     # Distance cutoff for removing outliers of a sample group with a group
     # size greater than min_samples replicates.
     dist_cutoff_outlier <- 0.01
@@ -88,22 +90,85 @@ initializeParameters <- function(config_file, counts_dir, params_dir, scripts_di
     # less than min_samples replicates. Therefore entire such sample group
     # is kept even if its size is greater than dist_cutoff_outlier.
     dist_cutoff_group <- 0.015
-    # Plot cluster.
+    # Color sample groups.
+    color_sample_groups <- TRUE
+    # Generate sample cluster plots.
     plot_clust <- TRUE
+    # Also generate empty sample cluster plots.
+    plot_empty_clust <- TRUE
+    # Type of plotted cluster images: png, jpg, svg, pdf, and eps.
+    clust_image_type <- "pdf"
+    # Plot all cluster images into a single image file.
+    single_clust_image_file <- TRUE
+    # Mutiple options of the layout and size for multi-image PDF plots:
+    # 1) 1 row x 2 columns on 12" wide x 6" high,
+    #    with aspect ratio kept and by-row plot flow.
+    # 2) 2 row x 2 columns on 10" wide x 10" high,
+    #    with aspect ratio kept and by-row plot flow.
+    # 3) 3 row x 2 columns on 8.5" wide x 11" high,
+    #    without aspect ratio kept and by-row plot flow,
+    #    for portrait printing on letter-size paper.
+    # 4) 2 row x 3 columns on 11" wide x 8.5" high,
+    #    without aspect ratio kept and by-column plot flow,
+    #    for landscape printing on letter-size paper.
+    # 5) 4 row x 2 columns on 8.5" wide x 17" high,
+    #    with aspect ratio kept and by-row plot flow.
+    # Layout of cluster images in PDF plot.
+    clust_image_rows <- 1
+    clust_image_columns <- 2
+    # Size of plotted cluster images: 8.5x11 for vector and 1600x2070 for raster.
+    clust_image_width <- 12.5
+    clust_image_height <- 6
+    # Indicator for keeping the aspect ratio for multi-image clustering plots.
+    clust_image_keep_aspect_ratio <- TRUE
+    # Flow direction for multi-image plots: by row or by column.
+    clust_image_plot_flow <- "row"
+    # Field name of the group to be colored in clustered samples.
+    color_field_name <- "Culture"
+    # Type of the field name of the group to be colored in clustered samples:
+    # either character or numeric.
+    color_field_type <- "numeric"
+    # Default properties of title components for sample cluster plots.
+    clust_title_elems_keys <- c("State", "Culture", "Measurement", "Subject")
+    # Text of title components for sample cluster plots.
+    clust_title_elems_names <- c(State="State", Culture="Culture", Measurement="Measurement", Subject="Subject")
+    # Flags to indicate whether to include a title component for sample cluster plots.
+    clust_title_elems_flags <- c(State=TRUE, Culture=TRUE, Measurement=TRUE, Subject=TRUE)
+    # Text name for color field used as the title text for the color legend in
+    # cluster plots.
+    color_text_name <- "Exp"
     # Merge sample replicates across different plates.
     merge_plates <- FALSE
     merged_plate_number <- 0
+    merged_plate_field_name <- NULL
 
-    # Parameters for distance heat map.
+    # Parameters for distance heatmap.
 
-    # Plot heat map
+    # Plot distance heatmap images.
     plot_heatmap <- TRUE
+    # Type of plotted heatmap images: png, jpg, svg, pdf, and eps.
+    heatmap_image_type <- "pdf"
+    # Size of plotted heatmap images: 8.5x8.5 for vector and 1600x1600 for raster.
+    heatmap_image_width <- 8.5
+    heatmap_image_height <- 8.5
+    # Plot all heatmap images into a single image file.
+    single_heatmap_image_file <- TRUE
     # Lower and upper limits for heatmap plot
     lower_limit <- 0
     upper_limit <- 0.02
 
     # Parameters for differential comparison.
 
+    # The names of multiple subsets for DEG comparison, such that each DEG comparison
+    # between two conditions is divided into multiple comparisons, each of which
+    # corresponds to a subset, and then multiple sets of DEG lists are merged with the
+    # method specified by subset_merge_method.
+    subset_field_name <- NULL
+    # Text name for subset field used as the title text for cluster plots.
+    subset_text_name <- NULL
+    # The method used for merging multiple sets of DEG lists as a result of subset
+    # specification.
+    subset_merge_method <- NULL
     # Name of CTRL condition.
     state_name_ctrl <- "CTRL"
     # Method of calculating dispersion: "common", "trended", "tagwise", or "auto".
@@ -118,6 +183,13 @@ initializeParameters <- function(config_file, counts_dir, params_dir, scripts_di
     remove_small <- TRUE
     # A set of FDR values at which differential comparison is performed.
     fdrs <- c(0.05)
+    # Type of plotted deg images: png, jpg, svg, pdf, and eps.
+    deg_image_type <- "pdf"
+    # Size of plotted deg images: 8.5x8.5 for vector and 1600x1600 for raster.
+    deg_image_width <- 8.5
+    deg_image_height <- 8.5
+    # Plot all deg images into a single image file.
+    single_deg_image_file <- TRUE
     # Plot BCV and Mean-Variance.
     plot_bcv <- TRUE
     plot_smear <- TRUE
@@ -226,12 +298,35 @@ initializeParameters <- function(config_file, counts_dir, params_dir, scripts_di
             if(exists("min_samples",inherits=FALSE)) min_samples <- as.numeric(min_samples)
             if(exists("dist_cutoff_outlier",inherits=FALSE)) dist_cutoff_outlier <- as.numeric(dist_cutoff_outlier)
             if(exists("dist_cutoff_group",inherits=FALSE)) dist_cutoff_group <- as.numeric(dist_cutoff_group)
+            if(exists("color_sample_groups",inherits=FALSE)) color_sample_groups <- as.logical(color_sample_groups)
             if(exists("plot_clust",inherits=FALSE)) plot_clust <- as.logical(plot_clust)
+            if(exists("plot_empty_clust",inherits=FALSE)) plot_empty_clust <- as.logical(plot_empty_clust)
+            if(exists("clust_image_rows",inherits=FALSE)) clust_image_rows <- as.numeric(clust_image_rows)
+            if(exists("clust_image_columns",inherits=FALSE)) clust_image_columns <- as.numeric(clust_image_columns)
+            if(exists("clust_image_width",inherits=FALSE)) clust_image_width <- as.numeric(clust_image_width)
+            if(exists("clust_image_height",inherits=FALSE)) clust_image_height <- as.numeric(clust_image_height)
+            if(exists("clust_image_keep_aspect_ratio",inherits=FALSE)) clust_image_keep_aspect_ratio <- as.logical(clust_image_keep_aspect_ratio)
+            if(exists("single_clust_image_file",inherits=FALSE)) single_clust_image_file <- as.logical(single_clust_image_file)
+            if(exists("clust_title_elems_names",inherits=FALSE))
+            {
+                clust_title_elems_names <- strsplit(clust_title_elems_names, split=" *, *")[[1]]
+                if(length(clust_title_elems_names) == length(clust_title_elems_keys)) names(clust_title_elems_names) <- clust_title_elems_keys
+                else warning("The length of clust_title_elems_names is different from the length of clust_title_elems_keys!")
+            }
+            if(exists("clust_title_elems_flags",inherits=FALSE))
+            {
+                clust_title_elems_flags <- as.logical(strsplit(clust_title_elems_flags, split=" *, *")[[1]])
+                if(length(clust_title_elems_flags) == length(clust_title_elems_keys)) names(clust_title_elems_flags) <- clust_title_elems_keys
+                else warning("The length of clust_title_elems_flags is different from the length of clust_title_elems_keys!")
+            }
             if(exists("merge_plates",inherits=FALSE)) merge_plates <- as.logical(merge_plates)
             if(exists("merged_plate_number",inherits=FALSE)) merged_plate_number <- as.numeric(merged_plate_number)
 
             # Parameters for distance heat map.
             if(exists("plot_heatmap",inherits=FALSE)) plot_heatmap <- as.logical(plot_heatmap)
+            if(exists("heatmap_image_width",inherits=FALSE)) heatmap_image_width <- as.numeric(heatmap_image_width)
+            if(exists("heatmap_image_height",inherits=FALSE)) heatmap_image_height <- as.numeric(heatmap_image_height)
+            if(exists("single_heatmap_image_file",inherits=FALSE)) single_heatmap_image_file <- as.logical(single_heatmap_image_file)
             if(exists("lower_limit",inherits=FALSE)) lower_limit <- as.numeric(lower_limit)
             if(exists("upper_limit",inherits=FALSE)) upper_limit <- as.numeric(upper_limit)
 
@@ -246,6 +341,9 @@ initializeParameters <- function(config_file, counts_dir, params_dir, scripts_di
             if(exists("norm_base",inherits=FALSE)) norm_base <- as.numeric(norm_base)
             if(exists("remove_small",inherits=FALSE)) remove_small <- as.logical(remove_small)
             if(exists("fdrs",inherits=FALSE)) fdrs <- as.numeric(strsplit(fdrs, split=" *, *")[[1]])
+            if(exists("deg_image_width",inherits=FALSE)) deg_image_width <- as.numeric(deg_image_width)
+            if(exists("deg_image_height",inherits=FALSE)) deg_image_height <- as.numeric(deg_image_height)
+            if(exists("single_deg_image_file",inherits=FALSE)) single_deg_image_file <- as.logical(single_deg_image_file)
             if(exists("plot_bcv",inherits=FALSE)) plot_bcv <- as.logical(plot_bcv)
             if(exists("plot_smear",inherits=FALSE)) plot_smear <- as.logical(plot_smear)
             if(exists("pt_chars",inherits=FALSE)) pt_chars <- as.numeric(strsplit(pt_chars, split=" *, *")[[1]])

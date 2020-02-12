@@ -49,8 +49,18 @@ selectGeneExpSamples <- function(gene_exp, cutoff_outlier=0.01, cutoff_group=cut
     if(inherits(gene_exp, "diana")) divclust <- gene_exp
     else if(inherits(gene_exp, "matrix"))
     {
-        # Calculate divisive hierarchical clusters of given gene expression samples.
-        divclust <- calcDivClustOfGeneExpSamples(gene_exp, metric="correlation")
+        if(ncol(gene_exp) > 1)
+        {
+            # Calculate divisive hierarchical clusters of given gene expression samples.
+            divclust <- calcDivClustOfGeneExpSamples(gene_exp, metric="correlation")
+        }
+        else
+        {
+            # Let single-column matrix pass through since clustering method cannot
+            # hanle such case.
+            warning("Pass through a single-column matrix!")
+            return(colnames(gene_exp))
+        }
     }
     else
     {
@@ -149,10 +159,7 @@ selectGeneExpSamples <- function(gene_exp, cutoff_outlier=0.01, cutoff_group=cut
         if(verbose) print(sample_names_sel)
         if(verbose) print(paste("And the height is", sample_height_sel))
     }
-    else
-    {
-        if(verbose) print("No sample replicate is selected")
-    }
+    else warning("No sample replicate is selected!")
 
     # Return the selected sample replicates
     return(sample_names_sel)

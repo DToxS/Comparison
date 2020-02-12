@@ -128,6 +128,8 @@ readReadCountsDatasets <- function(read_counts_files, generateReadCountsColumnNa
         stopifnot(all(!is.na(exprt_design$State)) && all(!is.na(exprt_design$Subject)) && all(!is.na(exprt_design$Culture)) && all(!is.na(exprt_design$Replicate)) && all(!is.na(exprt_design$Measure)) && all(!is.na(exprt_design$Sample)))
         # Assemble the ID field from all 6 fields.
         id_name <- paste(exprt_design$State, exprt_design$Subject, exprt_design$Culture, exprt_design$Replicate, exprt_design$Measure, exprt_design$Sample, sep=".")
+        # Record the positions of field names composing sample IDs.
+        sample_id_fields <- c(State=1, Subject=2, Culture=3, Replicate=4, Measure=5, Sample=6)
         # Ensure the uniqueness of IDs.
         stopifnot(!any(duplicated(id_name)))
         # Assign IDs to read counts and experiment design.
@@ -141,6 +143,6 @@ readReadCountsDatasets <- function(read_counts_files, generateReadCountsColumnNa
     }
 
     # Return read counts list and experiment design list.
-    read_counts_datasets <- list(read_counts_list=read_counts_list, exprt_design_list=exprt_design_list)
+    read_counts_datasets <- list(read_counts_list=read_counts_list, exprt_design_list=exprt_design_list, sample_id_fields=sample_id_fields)
     return(read_counts_datasets)
 }
