@@ -5,7 +5,7 @@ This step of analysis performs a statistical comparison of the difference in the
 **Note:**
 
 - The `[Type]` tag included in the file and directory names below refers to either `Conv` for conventional sequence data or `DGE` for 3'-DGE sequence data.
-- The `[Set]` and `[Subset]` tags refer to [Analyzing 3'-DGE Random-Primed mRNA-Sequencing Data](https://github.com/DToxS/Conv-GEO-Depot) and they only apply to `DGE` type of sequence data where multiple `[Set]` of datasets are available.
+- The `[Set]` and `[Subset]` tags refer to [Analyzing 3'-DGE Random-Primed mRNA-Sequencing Data](https://github.com/DToxS/DGE-GEO-Depot) and they only apply to `DGE` type of sequence data where multiple `[Set]` of datasets are available.
 
 ## Inputs
 
